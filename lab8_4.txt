@@ -1,0 +1,189 @@
+219223 Computer System Laboratory
+Lab 8-4: Vibe coding RISC-V assembler
+16 March 2026
+1. Learning goals of the lab
+1. Build a working assembler for a subset of RV32I 2. Practice modular software design in C 3. Understand how machine instructions are encoded 4. Implement a two-pass assembler to resolve labels 5. Practice incremental development and testing 6. Use AI-assisted ("vibe") coding responsibly
+2. Instructions the assembler must support
+Arithmetic, memory, and control from the attached CS61C reference card file.
+Arithmetic (R-type)
+add sub and or xor sll srl sra slt sltu
+Immediate arithmetic (I-type)
+addi andi ori xori slli srli srai slti sltiu
+Memory
+lb lbu lh lhu lw sb sh sw
+
+Control
+beq bne blt bge bltu bgeu jal jalr
+These instructions correspond to the RISC-V instruction formats shown on the reference card (R, I, S, B, U, J formats).
+You will encode instructions into 32-bit machine code using these formats.
+3. Repository structure
+riscv-assembler-lab/   Makefile  README.md   src/   main.c   assembler.c   assembler.h   parser.c   parser.h   registers.c   registers.h   instr_table.c   instr_table.h   symbols.c   symbols.h   encode.c   encode.h   tests/   test_registers.c   test_parser.c   test_instr_table.c   test_symbols.c   test_encode.c   test_assembler.c   examples/
+
+ test_case_1.s Use the attached script file to create the above repository.
+4. Purpose of each module
+main.c
+Entry point of the program. Responsibilities: 1. Read command line arguments 2. Invoke assembler 3. Handle basic errors
+Example: main()
+ assemble_file("program.s")
+assembler.c / assembler.h
+This module coordinates the entire assembler pipeline. Responsibilities: open assembly file perform pass 1 perform pass 2 output machine code
+This file controls the workflow, but does not implement parsing or encoding itself.
+parser.c / parser.h
+
+Responsible for interpreting a line of assembly text. Example input: loop: add x1, x2, x3
+Parser produces structured data: label = "loop" mnemonic = "add" operands = ["x1","x2","x3"]
+This separation allows parsing to be tested independently.
+registers.c / registers.h
+Handles register name conversion. Example: "x5"  5 "x31"  31
+This module is extremely small but essential.
+instr_table.c / instr_table.h
+Stores the instruction specification table. Example entry: add format = R opcode = 0x33 funct3 = 0 funct7 = 0
+
+This module demonstrates the key insight: An assembler is largely structured table lookup.
+The information comes directly from the CS61C reference card tables.
+symbols.c / symbols.h
+Stores labels and their addresses. Example symbol table: loop  12 done  24
+Responsibilities: insert label lookup label detect duplicate labels
+encode.c / encode.h
+Responsible for packing fields into machine code. Example: encode_r(opcode, funct3, funct7, rd, rs1, rs2)
+Produces a 32-bit instruction.
+tests/
+Each module has a unit test. Example:
+
+test_registers test_parser test_encode
+
+This reinforces test-driven modular development. In summary, each model solves one problem.
+
+Module
+
+Responsibility
+
+main
+
+program entry
+
+assembler
+
+pipeline control
+
+parser
+
+break text into components
+
+registers
+
+convert register names
+
+instr_table lookup instruction metadata
+
+symbols
+
+label resolution
+
+encode
+
+pack bits into machine code
+
+5. Program control flow
+The assembler pipeline works like this:
+main()  
+assemble_file("program.s")  
+open assembly file  
+PASS 1 
+
+ read each line  parse instruction  record labels in symbol table   PASS 2   parse instruction  lookup instruction specification  resolve registers  resolve label offsets  encode instruction   output machine code
+6. Dataflow for one instruction: beq x1 x2
+loop
+assembly line  
+parser  
+ParsedLine (label="", mnemonic="beq", operands=[x1,x2,loop])
+  instruction lookup   InstrSpec (opcode=0x63 funct3=0)   register parser  
+
+rs1 = 1 rs2 = 2
+  symbol table lookup   offset = label_address - PC   B-type encoder   32-bit machine instruction
+7. Two-pass assembler for labels
+Branches reference labels: beq x1 x2 loop
+But the address of loop might appear later in the file.
+Therefore we need two passes.
+Pass 1 -- build symbol table
+Read every line and record labels. Example: 0: start: 4: addi x1 x0 5 8: addi x2 x0 10 12: loop: 16: add x3 x1 x2
+
+Symbol table: start  0 loop  12
+Pass 2 -- encode instructions
+Now branch instructions can compute offsets: offset = label_address - current_PC Example: beq x1 x2 loop Offset = 12 - 4 = 8 This offset is encoded into the B-type immediate field.
+8. Starting vibe coding
+Students should not ask AI to build the whole assembler. Instead they follow the modular plan. I assume you all have VS Code set up with Github Co-pilot.
+Step 1: Implement register parser
+
+Module: src/registers.c
+Function: parse_register("x5")  5
+Prompt example: Implement parse_register(const char *name). Requirements: - Accept register names x0 to x31 - Return register number - Return -1 for invalid input Also, prompt the AI to generate test cases in tests/test_registers.c
+
+Step 2: write first Makefile
+
+Only test register module. Write your prompt and see if you get a similar code as below.
+
+CC=gcc CFLAGS=-Wall -Wextra -Isrc
+
+test_registers:
+
+
+
+gcc $(CFLAGS) tests/test_registers.c src/registers.c -o test_registers
+
+Run:
+make test_registers ./test_registers
+
+Step 3: implement parser module
+
+Prompt: Write parse_line() that extracts: - optional label - mnemonic - operands
+Test using: test_parser
+Update Makefile accordingly.
+Step 4: instruction table
+Students vibe-code the instruction table from the reference card. Example: {"add", FMT_R, 0x33, 0x0, 0x00}
+The instruction metadata is taken directly from the CS61C reference card.
+Step 5: symbol table
+Implement simple array-based symbol table. Functions: symbols_add symbols_find
+Test with: test_symbols
+
+Step 6: instruction encoding
+Students implement functions: encode_r encode_i encode_s encode_b encode_j
+These pack instruction fields into the bit layout shown on the reference card.
+Step 7: implement assembler pipeline
+Assembler performs: PASS 1: record labels PASS 2: encode instructions
+Now write tests for the whole assembler.
+9. Final Makefile
+Once modules work independently, integrate them. Example final Makefile: CC=gcc CFLAGS=-Wall -Wextra -Isrc SRC=src/main.c src/assembler.c src/parser.c \
+src/registers.c src/instr_table.c \
+
+src/symbols.c src/encode.c
+
+assembler:
+
+
+
+gcc $(CFLAGS) $(SRC) -o assembler
+
+clean:
+
+
+
+rm -f assembler
+
+Run:
+make assembler ./assembler examples/simple.s
+
+10. Final test
+Generate 3 test cases.
+ RISC-V assembly code with no less than 20 lines, exercising as many arithmetic, memory, and control as many as possible
+ RISC-V assembly code with no less than 50 lines, exercising as many arithmetic, memory, and control as many as possible
+ RISC-V assembly code with no less than 120 lines, exercising as many arithmetic, memory, and control as many as possible
+Then, check against the Venus simulator if the outputs of your assembler are correct.
+Put all these test cases in the examples directory together with a test report showing machine code dump from Venus versus your assembler output.
+
+11. Submission
+ Once you are done, push this repo to your remote Github repository of the same name.  Submit the link to your Github repo to Google Classroom
+
+ You must demo your code, its execution, and its outcome to the instructor or the TAs to get credits for this work
+
+
