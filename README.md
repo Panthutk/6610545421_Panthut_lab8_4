@@ -83,3 +83,22 @@ To remove all the compiled executable files, you can run the `clean` target:
 ```bash
 make clean
 ```
+
+## Test Report
+
+The compilation and execution of all test suites produce the following successful output:
+
+```text
+Running test_parse_register...
+All test_parse_register tests passed!
+Running test_parse_line...
+All test_parse_line tests passed!
+Running test_lookup_instruction...
+All test_lookup_instruction tests passed!
+Running test_symbols...
+All test_symbols tests passed!
+Running test_encode...
+All test_encode tests passed!
+Running test_assembler...
+All test_assembler tests passed!
+```
